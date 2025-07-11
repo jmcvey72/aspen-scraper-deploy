@@ -2,24 +2,27 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 import subprocess
 
-# Install Playwright browser dependencies on each deploy
+# Install browsers (Render needs this on each deploy)
 subprocess.run(["playwright", "install", "chromium"], check=True)
 
 def scrape_aspen_dealers():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-
         print("➡️ Visiting Aspen dealer locator...")
         page.goto("https://www.aspenfuels.us/outlets/find-dealer/", timeout=60000)
 
-        # ✅ Wait for network request that returns dealer data
-        page.wait_for_response(lambda response: "locations.json" in response.url and response.status == 200, timeout=30000)
+        # Wait until the JavaScript variable is defined
+        page.wait_for_timeout(5000)  # Let the JS run
+        page.wait_for_function(
+            "window.storeLocator && window.storeLocator.locations && window.storeLocator.locations.length > 0",
+            timeout=20000
+        )
 
-        # ✅ Then evaluate the JS variable
+        # Extract dealer data from the JS variable
         dealer_data = page.evaluate("""
             () => {
-                return window.storeLocator?.locations?.map(loc => ({
+                return window.storeLocator.locations.map(loc => ({
                     name: loc.store,
                     address: loc.address,
                     city: loc.city,
@@ -29,7 +32,7 @@ def scrape_aspen_dealers():
                     lat: loc.lat,
                     lng: loc.lng,
                     url: loc.url
-                })) || [];
+                }));
             }
         """)
 
