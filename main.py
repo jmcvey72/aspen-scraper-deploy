@@ -1,9 +1,8 @@
 import pandas as pd
 from playwright.sync_api import sync_playwright
 import subprocess
-import json
 
-# Ensure Chromium is installed
+# Ensure Playwright is installed
 subprocess.run(["playwright", "install", "chromium"], check=True)
 
 def scrape_aspen_dealers():
@@ -15,25 +14,29 @@ def scrape_aspen_dealers():
         dealer_data = []
 
         def handle_response(response):
-            if "dealers" in response.url and response.status == 200 and response.request.resource_type == "xhr":
-                try:
+            try:
+                if "dealers" in response.url and response.status == 200:
                     json_data = response.json()
-                    if isinstance(json_data, dict) and "locations" in json_data:
+                    if "locations" in json_data:
                         dealer_data.extend(json_data["locations"])
-                except Exception as e:
-                    print(f"Failed to parse dealer JSON: {e}")
+                        print(f"✅ Captured {len(json_data['locations'])} dealers from JSON.")
+            except Exception as e:
+                print(f"⚠️ Error parsing response from {response.url}: {e}")
 
         page.on("response", handle_response)
 
-        print("➡️ Visiting Aspen dealer locator page...")
+        print("➡️ Loading Aspen dealer page...")
         page.goto("https://www.aspenfuels.us/outlets/find-dealer/", timeout=60000)
-        page.wait_for_timeout(10000)  # wait for data to load
+        page.wait_for_timeout(10000)
 
         browser.close()
         return dealer_data
 
-# Run and save results
 data = scrape_aspen_dealers()
+
+if not data:
+    print("⚠️ No dealer data captured. Possible cause: network route not triggered.")
+
 df = pd.DataFrame(data)
 
 if not df.empty:
@@ -43,4 +46,5 @@ if not df.empty:
     })[["name", "address", "city", "state", "zip", "phone", "lat", "lng", "url"]]
 
 df.to_csv("aspen_us_dealers.csv", index=False)
-print(f"✅ Scraped {len(df)} dealers and saved to aspen_us_dealers.csv")
+print(f"✅ Done. Scraped {len(df)} dealers and saved to aspen_us_dealers.csv")
+
