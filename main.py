@@ -1,5 +1,9 @@
 import pandas as pd
 from playwright.sync_api import sync_playwright
+import subprocess
+
+# Ensure browsers are installed at runtime (this solves the Render error)
+subprocess.run(["playwright", "install"], check=True)
 
 def scrape_aspen_dealers():
     with sync_playwright() as p:
