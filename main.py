@@ -2,17 +2,21 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 import subprocess
 
-# Ensure browsers are installed at runtime (this solves the Render error)
-subprocess.run(["playwright", "install"], check=True)
+# Ensure Playwright installs the necessary browser
+subprocess.run(["playwright", "install", "chromium"], check=True)
 
 def scrape_aspen_dealers():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto("https://www.aspenfuels.us/outlets/find-dealer/", timeout=60000)
-        page.wait_for_function("window.storeLocator && window.storeLocator.locations && window.storeLocator.locations.length > 0", timeout=15000)
 
-        # Extract raw dealer data from map markers
+        print("➡️ Navigating to page...")
+        page.goto("https://www.aspenfuels.us/outlets/find-dealer/", timeout=60000)
+
+        # Wait longer to ensure JS loads all dealer data
+        page.wait_for_timeout(10000)  # 10 seconds of idle wait
+
+        print("🔍 Extracting dealer data...")
         dealer_data = page.evaluate("""
             () => {
                 const markers = window.storeLocator?.locations || [];
@@ -33,6 +37,7 @@ def scrape_aspen_dealers():
         browser.close()
         return dealer_data
 
+# Run and save output
 data = scrape_aspen_dealers()
 df = pd.DataFrame(data)
 df.to_csv("aspen_us_dealers.csv", index=False)
