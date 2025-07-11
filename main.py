@@ -2,43 +2,42 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 import subprocess
 
-# Ensure Playwright installs the necessary browser
+# Ensure browsers are installed
 subprocess.run(["playwright", "install", "chromium"], check=True)
 
 def scrape_aspen_dealers():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        context = browser.new_context()
+        page = context.new_page()
 
-        print("➡️ Navigating to page...")
+        # Intercept the network request that contains dealer data
+        dealers_json = {}
+
+        def handle_response(response):
+            if "wp-json/wp/v2/dealers" in response.url and response.status == 200:
+                try:
+                    json_data = response.json()
+                    dealers_json.update(json_data)
+                except:
+                    pass
+
+        page.on("response", handle_response)
         page.goto("https://www.aspenfuels.us/outlets/find-dealer/", timeout=60000)
-
-        # Wait longer to ensure JS loads all dealer data
-        page.wait_for_timeout(10000)  # 10 seconds of idle wait
-
-        print("🔍 Extracting dealer data...")
-        dealer_data = page.evaluate("""
-            () => {
-                const markers = window.storeLocator?.locations || [];
-                return markers.map(m => ({
-                    name: m.store,
-                    address: m.address,
-                    city: m.city,
-                    state: m.state,
-                    zip: m.zip,
-                    phone: m.phone,
-                    lat: m.lat,
-                    lng: m.lng,
-                    url: m.url
-                }));
-            }
-        """)
+        page.wait_for_timeout(8000)
 
         browser.close()
-        return dealer_data
+        return dealers_json.get('locations', [])
 
-# Run and save output
+# Run and save
 data = scrape_aspen_dealers()
 df = pd.DataFrame(data)
+
+if not df.empty:
+    df = df.rename(columns={
+        'store': 'name',
+        'zip': 'zip',
+    })[["name", "address", "city", "state", "zip", "phone", "lat", "lng", "url"]]
+
 df.to_csv("aspen_us_dealers.csv", index=False)
 print(f"✅ Scraped {len(df)} dealers and saved to aspen_us_dealers.csv")
