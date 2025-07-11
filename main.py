@@ -10,7 +10,7 @@ def scrape_aspen_dealers():
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto("https://www.aspenfuels.us/outlets/find-dealer/", timeout=60000)
-        page.wait_for_timeout(8000)
+        page.wait_for_function("window.storeLocator && window.storeLocator.locations && window.storeLocator.locations.length > 0", timeout=15000)
 
         # Extract raw dealer data from map markers
         dealer_data = page.evaluate("""
